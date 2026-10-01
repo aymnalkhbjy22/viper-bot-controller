@@ -1,0 +1,256 @@
+import asyncio
+import json
+import os
+import sys
+from telegram import Bot, InputFile
+from colorama import Fore, Style, init
+from telegram import Bot
+from telegram.error import NetworkError, TelegramError
+
+init(autoreset=True)
+
+
+class BotController:
+
+  def __init__(self):
+    self.developer = "Ayman Al-Khubji"
+    self.version = "3.0 MAX"
+    self.db_file = "bot_users.json"
+    self.users = self.load_users()
+    self.last_update_id = None
+    self.bot = None
+
+  def clear_screen(self):
+    os.system("clear" if os.name == "posix" else "cls")
+
+  def print_banner(self):
+    self.clear_screen()
+    print(Fore.MAGENTA + "=" * 65)
+    print(Fore.CYAN + "   ██╗   ██╗██╗██████╗ ███████╗██████╗ ")
+    print(Fore.CYAN + "   ██║   ██║██║██╔══██╗██╔════╝██╔══██╗")
+    print(Fore.CYAN + "   ██║   ██║██║██████╔╝█████╗  ██████╔╝")
+    print(Fore.CYAN + "   ╚██╗ ██╔╝██║██╔═══╝ ██╔══╝  ██╔══██╗")
+    print(Fore.CYAN + "    ╚████╔╝ ██║██║     ███████╗██║  ██║")
+    print(Fore.CYAN + "     ╚═══╝  ╚═╝╚═╝     ╚══════╝╚═╝  ╚═╝")
+    print(Fore.YELLOW + f"       🤖 ULTIMATE TELEGRAM BOT CONTROL CENTER [{self.version}]")
+    print(Fore.GREEN + f"       👨‍💻 Senior Developer: {self.developer}")
+    print(Fore.MAGENTA + "=" * 65 + "\n")
+
+  def load_users(self):
+    if os.path.exists(self.db_file):
+      try:
+        with open(self.db_file, "r") as f:
+          return set(json.load(f))
+      except Exception:
+        return set()
+    return set()
+
+  def save_users(self):
+    try:
+      with open(self.db_file, "w") as f:
+        json.dump(list(self.users), f)
+    except Exception as e:
+      print(Fore.RED + f"⚠️ Database Save Error: {e}")
+
+  async def initialize_bot(self):
+    self.print_banner()
+    while True:
+      token = input(
+          Fore.GREEN + "🔑 Enter Bot Token: " + Style.RESET_ALL
+      ).strip()
+      if not token:
+        continue
+      try:
+        self.bot = Bot(token=token)
+        me = await self.bot.get_me()
+        print(Fore.GREEN + f"\n✅ Successfully connected to @{me.username}!")
+        await asyncio.sleep(1.5)
+        break
+      except Exception as e:
+        print(Fore.RED + f"❌ Connection Failed: {e}. Please try again.\n")
+
+  async def get_updates(self):
+    try:
+      updates = await self.bot.get_updates(
+          offset=self.last_update_id, timeout=8
+      )
+      for update in updates:
+        if update.message:
+          user = update.message.from_user
+          text = update.message.text or "[Non-text message]"
+
+          if user.id not in self.users:
+            self.users.add(user.id)
+            self.save_users()
+
+          print(Fore.CYAN + "\n" + "-" * 60)
+          print(Fore.YELLOW + "📩 Live Incoming Message:")
+          print(Fore.GREEN + f"👤 User ID : {user.id}")
+          print(Fore.BLUE + f"📛 Name    : {user.full_name}")
+          print(
+              Fore.MAGENTA
+              + f"🆔 Username: @{user.username if user.username else 'None'}"
+          )
+          print(Fore.WHITE + f"📝 Message : {text}")
+          print(Fore.CYAN + "-" * 60)
+
+        self.last_update_id = update.update_id + 1
+    except NetworkError:
+      await asyncio.sleep(2)
+    except Exception:
+      pass
+
+  async def change_name(self):
+    name = input(Fore.YELLOW + "📝 Enter new bot name: " + Style.RESET_ALL)
+    try:
+      await self.bot.set_my_name(name)
+      print(Fore.GREEN + "✅ Bot name updated successfully!")
+    except Exception as e:
+      print(Fore.RED + f"❌ Error: {e}")
+
+  async def change_bio(self):
+    bio = input(
+        Fore.YELLOW + "📄 Enter new bot bio/description: " + Style.RESET_ALL
+    )
+    try:
+      await self.bot.set_my_description(bio)
+      print(Fore.GREEN + "✅ Bot description updated successfully!")
+    except Exception as e:
+      print(Fore.RED + f"❌ Error: {e}")
+
+  async def change_short_description(self):
+    desc = input(
+        Fore.YELLOW
+        + "ℹ️ Enter new short description (about text): "
+        + Style.RESET_ALL
+    )
+    try:
+      await self.bot.set_my_short_description(desc)
+      print(Fore.GREEN + "✅ Short description updated successfully!")
+    except Exception as e:
+      print(Fore.RED + f"❌ Error: {e}")
+
+  async def change_photo(self):
+    path = input(
+        Fore.YELLOW + "🖼️ Enter photo file path: " + Style.RESET_ALL
+    ).strip()
+    if not os.path.exists(path):
+      print(Fore.RED + "❌ File not found! Check the path.")
+      return
+    try:
+      with open(path, "rb") as f:
+        photo_file = InputFile(f)
+        await self.bot.set_my_profile_photo(photo=photo_file)
+      print(Fore.GREEN + "✅ Bot profile photo updated successfully!")
+    except Exception as e:
+      print(Fore.RED + f"❌ Error: {e}")
+
+  async def broadcast(self):
+    if not self.users:
+      print(
+          Fore.RED
+          + "❌ User database is empty! Run Live Monitor first to collect users."
+      )
+      return
+
+    msg = input(
+        Fore.YELLOW + "📢 Enter broadcast message: " + Style.RESET_ALL
+    ).strip()
+    if not msg:
+      return
+
+    print(
+        Fore.CYAN
+        + f"\n🚀 Dispatching message to {len(self.users)} stored users..."
+    )
+    success = 0
+    failed = 0
+
+    for uid in list(self.users):
+      try:
+        await self.bot.send_message(uid, msg)
+        success += 1
+        await asyncio.sleep(0.04)  # Rate limiter to prevent flood limits
+      except TelegramError:
+        failed += 1
+
+    print(Fore.GREEN + f"\n📊 Broadcast Complete:")
+    print(Fore.GREEN + f"   - Successfully Sent: {success}")
+    print(Fore.RED + f"   - Failed/Blocked   : {failed}")
+
+  async def monitor(self):
+    print(
+        Fore.MAGENTA
+        + "\n🟢 Live Activity Monitor running... Listening for incoming messages."
+    )
+    print(Fore.YELLOW + "⏸ Press Ctrl+C anytime to stop monitoring and return.\n")
+    try:
+      await self.bot.delete_webhook(drop_pending_updates=True)
+      while True:
+        await self.get_updates()
+        await asyncio.sleep(1)
+    except KeyboardInterrupt:
+      print(Fore.YELLOW + "\n↩️ Returning to Control Center...")
+
+  async def show_stats(self):
+    me = await self.bot.get_me()
+    print(Fore.CYAN + "\n" + "=" * 50)
+    print(Fore.YELLOW + "📊 SYSTEM STATISTICS & BOT INFO")
+    print(Fore.CYAN + "=" * 50)
+    print(Fore.WHITE + f"• Bot ID       : {me.id}")
+    print(Fore.WHITE + f"• Bot Name     : {me.first_name}")
+    print(Fore.WHITE + f"• Bot Username : @{me.username}")
+    print(Fore.WHITE + f"• Stored Users : {len(self.users)} users")
+    print(Fore.CYAN + "=" * 50)
+
+  async def main_menu(self):
+    await self.initialize_bot()
+
+    while True:
+      self.print_banner()
+      print(Fore.YELLOW + "🎛️ CONTROL CENTER MENU:")
+      print(Fore.GREEN + "1. 📝 Change Bot Name")
+      print(Fore.GREEN + "2. 📄 Change Bot Bio (Description)")
+      print(Fore.GREEN + "3. ℹ️ Change Short Description (About)")
+      print(Fore.GREEN + "4. 🖼️ Change Bot Profile Photo")
+      print(
+          Fore.GREEN
+          + f"5. 📢 Broadcast Message ({len(self.users)} users loaded)"
+      )
+      print(Fore.GREEN + "6. 📡 Live Monitoring Console")
+      print(Fore.GREEN + "7. 📊 View Bot Statistics")
+      print(Fore.RED + "8. 🛑 Exit System")
+      print(Fore.MAGENTA + "=" * 65)
+
+      choice = input(
+          Fore.YELLOW + "Select an option [1-8]: " + Style.RESET_ALL
+      ).strip()
+
+      if choice == "1":
+        await self.change_name()
+      elif choice == "2":
+        await self.change_bio()
+      elif choice == "3":
+        await self.change_short_description()
+      elif choice == "4":
+        await self.change_photo()
+      elif choice == "5":
+        await self.broadcast()
+      elif choice == "6":
+        await self.monitor()
+      elif choice == "7":
+        await self.show_stats()
+      elif choice == "8":
+        print(Fore.RED + "\n🛑 Shutting down system. Goodbye!")
+        sys.exit(0)
+      else:
+        print(Fore.RED + "❌ Invalid selection!")
+
+      input(
+          Fore.CYAN + "\nPress Enter to return to main menu..." + Style.RESET_ALL
+      )
+
+
+if __name__ == "__main__":
+  controller = BotController()
+  asyncio.run(controller.main_menu())
